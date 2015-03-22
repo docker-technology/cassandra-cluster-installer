@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# NOTE: This requires GNU getopt.  On Mac OS X and FreeBSD, you have to install this
+# separately; see below.
+TEMP=`getopt -o s --long start,seeds:,at-node: \
+             -n 'ccm' -- "$@"`
+
+if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
+
+# Note the quotes around `$TEMP': they are essential!
+eval set -- "$TEMP"
+
+START=false
+SEEDS=
+AT_NODE=
+while true; do
+  case "$1" in
+    -s | --start ) START=true; shift ;;
+    --seeds ) SEEDS="$2"; shift 2 ;;
+    --at-node ) AT_NODE="$2"; shift 2 ;;
+    -- ) shift; break ;;
+    * ) break ;;
+  esac
+done
+
+if [ "$START" = true ]; then
+	if [ -z $SEEDS ]; then
+		echo "Need seeds (using --seeds) to start a cassandra node" >&2
+		exit
+	fi
+	if [ -z $AT_NODE ]; then
+		echo "Please specify a node (using --at-node) to start cassandra" >&2
+		exit
+	fi
+	docker -H :2376 run -e constraint:hostip==$AT_NODE --net=host -t dockertechnology/cassandra $SEEDS $AT_NODE	
+fi 

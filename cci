@@ -1,0 +1,77 @@
+#!/bin/bash
+
+function log {
+  if [ ! -f log.txt ]; then
+    touch log.txt
+  fi
+  echo "$1" >> log.txt
+}
+
+install_docker() 
+{
+  log "!!==========Installing the latest Docker version"
+  apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 36A1D7869245C8950F966E92D8576A8BA88D21E9
+  sh -c "echo deb https://get.docker.com/ubuntu docker main > /etc/apt/sources.list.d/docker.list"
+  apt-get update
+  apt-get install -y lxc-docker
+
+  log "!!==========Updating DOCKER_OPTS"
+  sed -i -e "s/#DOCKER_OPTS=\"--dns 8.8.8.8 --dns 8.8.4.4\"/DOCKER_OPTS=\"-H tcp:\/\/0.0.0.0:2375 --label hostip=$HOST_IP\"/g" /etc/default/docker
+  service docker restart
+}
+
+# NOTE: This requires GNU getopt.  On Mac OS X and FreeBSD, you have to install this
+# separately; see below.
+TEMP=`getopt -o nmc --long node,manager,cluster-id: -n 'cci' -- "$@"`
+
+if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
+
+# Note the quotes around `$TEMP': they are essential!
+eval set -- "$TEMP"
+
+NODE=false
+MANAGER=false
+CLUSTER_ID=
+HOST_IP=$(ifconfig eth0 | awk -F ' *|:' '/inet addr/{print $4}')
+while true; do
+  case "$1" in
+    -n | --node ) NODE=true; shift ;;
+    -m | --manager ) MANAGER=true; shift ;;
+    -c | --cluster-id ) CLUSTER_ID="$3"; shift 2 ;;
+    -- ) shift; break ;;
+    * ) break ;;
+  esac
+done
+
+if [ "$NODE" = true ] && [ "$MANAGER" = true ];  then
+  exit 1
+fi
+
+if [ "$NODE" = true ]; then
+  install_docker
+  log "!!==========Pulling the official Docker image of Swarm"
+  docker -H :2375 pull swarm
+  if [ -z $CLUSTER_ID ]; then
+    CLUSTER_ID=$(docker -H :2375 run --rm swarm create)
+    log "!!==========Creating the first node[$HOST_IP] of cluster: $CLUSTER_ID"
+    touch cluster.id
+    echo "$CLUSTER_ID" > cluster.id    
+  else
+    log "!!==========Adding node[$HOST_IP] to cluster: $CLUSTER_ID"  
+  fi 
+  docker -H :2375 run -d swarm join --addr=$HOST_IP:2375 token://$CLUSTER_ID 
+fi
+
+if [ "$MANAGER" = true ]; then
+  install_docker
+  log "!!==========Pulling the official Docker image of Swarm"
+  docker -H :2375 pull swarm
+  if [ -z $CLUSTER_ID ]; then
+    log "!!==========Need a cluster id before installing a manager"
+    exit    
+  fi
+  log "!!==========Managing the cluster $CLUSTER_ID"
+  docker -H :2375 run -d -p 2376:2375 swarm manage token://$CLUSTER_ID
+  cp ccm /usr/bin
+  chmod u+x /usr/bin/ccm 
+fi
