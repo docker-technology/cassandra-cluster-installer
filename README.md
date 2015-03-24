@@ -29,12 +29,14 @@
     sudo ./cci -m `cat cluster.id`
 
 ## Finally, you can start Cassandra instances from the manager on any nodes you want
-### Start seeds
+### Start nodes
 
 * sudo ccm -s --seeds 192.168.1.2,192.168.1.3 --at-node 192.168.1.2
 * sudo ccm -s --seeds 192.168.1.2,192.168.1.3 --at-node 192.168.1.3
 * sudo ccm -s --seeds 192.168.1.2,192.168.1.3 --at-node 192.168.1.4
 * sudo ccm -s --seeds 192.168.1.2,192.168.1.3 --at-node 192.168.1.5
+
+> Be aware of seeds have to be started first
 
 ### Verify the installation
 
